@@ -1,0 +1,257 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated user account with role, PII, and landlord verification status",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "ecocashNumber": { "type": "string" },
+        "institution": { "type": "string" },
+        "bio": { "type": "string" },
+        "locationCity": { "type": "string" },
+        "avatarRef": { "type": "string" },
+        "role": { "type": "string", "enum": ["CUSTOMER", "LANDLORD", "ADMIN"] },
+        "landlordApproved": { "type": "boolean" },
+        "accountActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "displayName", "email", "role", "landlordApproved", "accountActive", "createdAt", "updatedAt"]
+    },
+    "PlatformConfig": {
+      "title": "PlatformConfig",
+      "description": "Admin-upgradable platform feature toggles and EcoCash fee settings",
+      "type": "object",
+      "properties": {
+        "unlockFeeUsd": { "type": "number" },
+        "unlockFeeZig": { "type": "number" },
+        "ecocashNumber": { "type": "string" },
+        "ecocashName": { "type": "string" },
+        "maxPhotosPerHouse": { "type": "integer" },
+        "requireHouseApproval": { "type": "boolean" },
+        "requireFeeForLocation": { "type": "boolean" },
+        "requireFeeForChat": { "type": "boolean" },
+        "enableLiveVacancy": { "type": "boolean" },
+        "enableFeaturedBoost": { "type": "boolean" },
+        "maintenanceMode": { "type": "boolean" },
+        "welcomeBannerText": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "unlockFeeUsd", "unlockFeeZig", "ecocashNumber", "ecocashName",
+        "maxPhotosPerHouse", "requireHouseApproval", "requireFeeForLocation",
+        "requireFeeForChat", "enableLiveVacancy", "enableFeaturedBoost",
+        "maintenanceMode", "welcomeBannerText", "updatedAt"
+      ]
+    },
+    "BoardingHouse": {
+      "title": "BoardingHouse",
+      "description": "Public boarding house listing catalogue with live vacancy and coarse suburb coordinates",
+      "type": "object",
+      "properties": {
+        "landlordUid": { "type": "string" },
+        "landlordName": { "type": "string" },
+        "name": { "type": "string" },
+        "suburb": { "type": "string" },
+        "description": { "type": "string" },
+        "monthlyRentUsd": { "type": "number" },
+        "depositUsd": { "type": "number" },
+        "totalRooms": { "type": "integer" },
+        "vacantRooms": { "type": "integer" },
+        "genderPolicy": { "type": "string", "enum": ["MIXED", "FEMALE_ONLY", "MALE_ONLY"] },
+        "roomType": { "type": "string", "enum": ["SHARED_2", "SINGLE", "BEDSITTER", "MIXED"] },
+        "distanceToCutKm": { "type": "number" },
+        "approxLat": { "type": "number" },
+        "approxLng": { "type": "number" },
+        "amenities": { "type": "array" },
+        "coverPhotoRef": { "type": "string" },
+        "photoRefs": { "type": "array" },
+        "status": { "type": "string", "enum": ["PENDING", "APPROVED", "SUSPENDED"] },
+        "featured": { "type": "boolean" },
+        "rating": { "type": "number" },
+        "reviewCount": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "landlordUid", "landlordName", "name", "suburb", "description",
+        "monthlyRentUsd", "depositUsd", "totalRooms", "vacantRooms",
+        "genderPolicy", "roomType", "distanceToCutKm", "approxLat", "approxLng",
+        "amenities", "coverPhotoRef", "photoRefs", "status", "featured",
+        "rating", "reviewCount", "createdAt", "updatedAt"
+      ]
+    },
+    "HousePrivateLocation": {
+      "title": "HousePrivateLocation",
+      "description": "Gated exact GPS coordinates and street address revealed only after EcoCash fee unlock",
+      "type": "object",
+      "properties": {
+        "houseId": { "type": "string" },
+        "landlordUid": { "type": "string" },
+        "exactLat": { "type": "number" },
+        "exactLng": { "type": "number" },
+        "streetAddress": { "type": "string" },
+        "landmarks": { "type": "string" },
+        "contactPhone": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["houseId", "landlordUid", "exactLat", "exactLng", "streetAddress", "landmarks", "contactPhone", "updatedAt"]
+    },
+    "HousePhoto": {
+      "title": "HousePhoto",
+      "description": "Uploaded boarding house gallery photo stored as compressed base64 thumbnail",
+      "type": "object",
+      "properties": {
+        "houseId": { "type": "string" },
+        "landlordUid": { "type": "string" },
+        "photoData": { "type": "string" },
+        "caption": { "type": "string" },
+        "sortOrder": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["houseId", "landlordUid", "photoData", "caption", "sortOrder", "createdAt"]
+    },
+    "PaymentRequest": {
+      "title": "PaymentRequest",
+      "description": "Customer EcoCash unlock payment submission verified by Admin using payer name",
+      "type": "object",
+      "properties": {
+        "customerUid": { "type": "string" },
+        "customerEmail": { "type": "string" },
+        "houseId": { "type": "string" },
+        "houseName": { "type": "string" },
+        "landlordUid": { "type": "string" },
+        "payerName": { "type": "string" },
+        "payerPhone": { "type": "string" },
+        "referenceCode": { "type": "string" },
+        "amountUsd": { "type": "number" },
+        "currencyLabel": { "type": "string" },
+        "status": { "type": "string", "enum": ["PENDING", "UNLOCKED", "REJECTED"] },
+        "adminNote": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "customerUid", "customerEmail", "houseId", "houseName", "landlordUid",
+        "payerName", "payerPhone", "referenceCode", "amountUsd", "currencyLabel",
+        "status", "createdAt", "updatedAt"
+      ]
+    },
+    "HouseUnlock": {
+      "title": "HouseUnlock",
+      "description": "Admin-verified unlock entitlement granting customer access to exact house location and landlord chat",
+      "type": "object",
+      "properties": {
+        "customerUid": { "type": "string" },
+        "houseId": { "type": "string" },
+        "houseName": { "type": "string" },
+        "landlordUid": { "type": "string" },
+        "payerName": { "type": "string" },
+        "paymentRequestId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["customerUid", "houseId", "houseName", "landlordUid", "payerName", "paymentRequestId", "createdAt"]
+    },
+    "ChatThread": {
+      "title": "ChatThread",
+      "description": "Real-time conversation thread between an unlocked customer and a boarding house landlord",
+      "type": "object",
+      "properties": {
+        "customerUid": { "type": "string" },
+        "customerName": { "type": "string" },
+        "landlordUid": { "type": "string" },
+        "landlordName": { "type": "string" },
+        "houseId": { "type": "string" },
+        "houseName": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "lastMessage": { "type": "string" },
+        "lastSenderUid": { "type": "string" },
+        "unreadByCustomer": { "type": "integer" },
+        "unreadByLandlord": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "customerUid", "customerName", "landlordUid", "landlordName",
+        "houseId", "houseName", "memberUids", "lastMessage", "lastSenderUid",
+        "unreadByCustomer", "unreadByLandlord", "createdAt", "updatedAt"
+      ]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Individual message inside a customer-landlord chat thread",
+      "type": "object",
+      "properties": {
+        "threadId": { "type": "string" },
+        "senderUid": { "type": "string" },
+        "senderName": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "text": { "type": "string" },
+        "messageType": { "type": "string", "enum": ["TEXT", "IMAGE", "LOCATION"] },
+        "imageData": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["threadId", "senderUid", "senderName", "memberUids", "text", "messageType", "createdAt"]
+    },
+    "HouseReview": {
+      "title": "HouseReview",
+      "description": "Student review for a boarding house",
+      "type": "object",
+      "properties": {
+        "houseId": { "type": "string" },
+        "authorUid": { "type": "string" },
+        "authorName": { "type": "string" },
+        "rating": { "type": "integer" },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["houseId", "authorUid", "authorName", "rating", "comment", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user profiles and role flags"
+    },
+    "/platform_config/{configId}": {
+      "schema": { "$ref": "#/entities/PlatformConfig" },
+      "description": "Platform configuration and EcoCash pricing tuned by Admin"
+    },
+    "/houses/{houseId}": {
+      "schema": { "$ref": "#/entities/BoardingHouse" },
+      "description": "Public boarding house catalogue"
+    },
+    "/houses/{houseId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/HousePrivateLocation" },
+      "description": "Exact GPS location unlocked after EcoCash verification"
+    },
+    "/houses/{houseId}/photos/{photoId}": {
+      "schema": { "$ref": "#/entities/HousePhoto" },
+      "description": "Uploaded boarding house gallery photos"
+    },
+    "/houses/{houseId}/reviews/{reviewId}": {
+      "schema": { "$ref": "#/entities/HouseReview" },
+      "description": "Verified student reviews for boarding houses"
+    },
+    "/payment_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/PaymentRequest" },
+      "description": "EcoCash unlock payment submissions and admin verification"
+    },
+    "/unlocks/{unlockId}": {
+      "schema": { "$ref": "#/entities/HouseUnlock" },
+      "description": "Verified unlocks keyed by customerUid_houseId"
+    },
+    "/chat_threads/{threadId}": {
+      "schema": { "$ref": "#/entities/ChatThread" },
+      "description": "Unlocked customer-landlord chat threads"
+    },
+    "/chat_threads/{threadId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Messages inside a customer-landlord chat thread"
+    }
+  }
+}

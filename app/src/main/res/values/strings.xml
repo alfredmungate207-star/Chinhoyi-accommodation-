@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Chinhoyi Stays</string>
+    <string name="brand_title">Chinhoyi Accommodations</string>
+    <string name="brand_subtitle">Verified boarding houses &amp; student residences around CUT &amp; Chinhoyi</string>
+    <string name="sign_in_google">Sign in with Google</string>
+    <string name="ecocash_pay_title">Unlock Exact Location &amp; Landlord Chat</string>
+    <string name="error_generic">Something went wrong. Please try again.</string>
+</resources>

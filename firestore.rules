@@ -1,0 +1,437 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- GLOBAL PRIMITIVES ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email == 'alfredmungate207@gmail.com' && request.auth.token.email_verified == true) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function hasUnlockedHouse(uid, houseId) {
+      return exists(/databases/$(database)/documents/unlocks/$(uid + '_' + houseId));
+    }
+
+    function isLocationFeeFree() {
+      return exists(/databases/$(database)/documents/platform_config/settings) &&
+             get(/databases/$(database)/documents/platform_config/settings).data.requireFeeForLocation == false;
+    }
+
+    function isChatFeeFree() {
+      return exists(/databases/$(database)/documents/platform_config/settings) &&
+             get(/databases/$(database)/documents/platform_config/settings).data.requireFeeForChat == false;
+    }
+
+    // --- VALIDATION HELPERS ---
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+             data.email is string && data.email.size() <= 150 &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() <= 30)) &&
+             (!('ecocashNumber' in data) || (data.ecocashNumber is string && data.ecocashNumber.size() <= 30)) &&
+             (!('institution' in data) || (data.institution is string && data.institution.size() <= 120)) &&
+             (!('bio' in data) || (data.bio is string && data.bio.size() <= 400)) &&
+             (!('locationCity' in data) || (data.locationCity is string && data.locationCity.size() <= 80)) &&
+             (!('avatarRef' in data) || (data.avatarRef is string && data.avatarRef.size() <= 500)) &&
+             data.role in ['CUSTOMER', 'LANDLORD', 'ADMIN'] &&
+             data.landlordApproved is bool &&
+             data.accountActive is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidPlatformConfig(data) {
+      return data.unlockFeeUsd is number && data.unlockFeeUsd >= 0 && data.unlockFeeUsd <= 500 &&
+             data.unlockFeeZig is number && data.unlockFeeZig >= 0 && data.unlockFeeZig <= 100000 &&
+             data.ecocashNumber is string && data.ecocashNumber.size() >= 4 && data.ecocashNumber.size() <= 30 &&
+             data.ecocashName is string && data.ecocashName.size() >= 2 && data.ecocashName.size() <= 80 &&
+             data.maxPhotosPerHouse is int && data.maxPhotosPerHouse >= 1 && data.maxPhotosPerHouse <= 20 &&
+             data.requireHouseApproval is bool &&
+             data.requireFeeForLocation is bool &&
+             data.requireFeeForChat is bool &&
+             data.enableLiveVacancy is bool &&
+             data.enableFeaturedBoost is bool &&
+             data.maintenanceMode is bool &&
+             data.welcomeBannerText is string && data.welcomeBannerText.size() <= 200 &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidHouse(data) {
+      return data.landlordUid is string && data.landlordUid.size() >= 1 && data.landlordUid.size() <= 128 &&
+             data.landlordName is string && data.landlordName.size() >= 1 && data.landlordName.size() <= 80 &&
+             data.name is string && data.name.size() >= 2 && data.name.size() <= 100 &&
+             data.suburb is string && data.suburb.size() >= 2 && data.suburb.size() <= 60 &&
+             data.description is string && data.description.size() <= 1500 &&
+             data.monthlyRentUsd is number && data.monthlyRentUsd >= 0 && data.monthlyRentUsd <= 10000 &&
+             data.depositUsd is number && data.depositUsd >= 0 && data.depositUsd <= 10000 &&
+             data.totalRooms is int && data.totalRooms >= 1 && data.totalRooms <= 500 &&
+             data.vacantRooms is int && data.vacantRooms >= 0 && data.vacantRooms <= data.totalRooms &&
+             data.genderPolicy in ['MIXED', 'FEMALE_ONLY', 'MALE_ONLY'] &&
+             data.roomType in ['SHARED_2', 'SINGLE', 'BEDSITTER', 'MIXED'] &&
+             data.distanceToCutKm is number && data.distanceToCutKm >= 0 && data.distanceToCutKm <= 100 &&
+             data.approxLat is number && data.approxLat >= -90 && data.approxLat <= 90 &&
+             data.approxLng is number && data.approxLng >= -180 && data.approxLng <= 180 &&
+             data.amenities is list && data.amenities.size() <= 15 && (data.amenities.size() == 0 || data.amenities[0] is string) &&
+             data.coverPhotoRef is string && data.coverPhotoRef.size() <= 500 &&
+             data.photoRefs is list && data.photoRefs.size() <= 12 && (data.photoRefs.size() == 0 || data.photoRefs[0] is string) &&
+             data.status in ['PENDING', 'APPROVED', 'SUSPENDED'] &&
+             data.featured is bool &&
+             data.rating is number && data.rating >= 0 && data.rating <= 5 &&
+             data.reviewCount is int && data.reviewCount >= 0 && data.reviewCount <= 100000 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidPrivateLocation(data) {
+      return data.houseId is string && data.houseId.size() >= 1 && data.houseId.size() <= 128 &&
+             data.landlordUid is string && data.landlordUid.size() >= 1 && data.landlordUid.size() <= 128 &&
+             data.exactLat is number && data.exactLat >= -90 && data.exactLat <= 90 &&
+             data.exactLng is number && data.exactLng >= -180 && data.exactLng <= 180 &&
+             data.streetAddress is string && data.streetAddress.size() >= 3 && data.streetAddress.size() <= 200 &&
+             data.landmarks is string && data.landmarks.size() <= 200 &&
+             data.contactPhone is string && data.contactPhone.size() <= 30 &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidHousePhoto(data) {
+      return data.houseId is string && data.houseId.size() >= 1 && data.houseId.size() <= 128 &&
+             data.landlordUid is string && data.landlordUid.size() >= 1 && data.landlordUid.size() <= 128 &&
+             data.photoData is string && data.photoData.size() >= 5 && data.photoData.size() <= 350000 &&
+             data.caption is string && data.caption.size() <= 120 &&
+             data.sortOrder is int && data.sortOrder >= 0 && data.sortOrder <= 50 &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidHouseReview(data) {
+      return data.houseId is string && data.houseId.size() >= 1 && data.houseId.size() <= 128 &&
+             data.authorUid is string && data.authorUid.size() >= 1 && data.authorUid.size() <= 128 &&
+             data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 80 &&
+             data.rating is int && data.rating >= 1 && data.rating <= 5 &&
+             data.comment is string && data.comment.size() >= 2 && data.comment.size() <= 500 &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidPaymentRequest(data) {
+      return data.customerUid is string && data.customerUid.size() >= 1 && data.customerUid.size() <= 128 &&
+             data.customerEmail is string && data.customerEmail.size() <= 150 &&
+             data.houseId is string && data.houseId.size() >= 1 && data.houseId.size() <= 128 &&
+             data.houseName is string && data.houseName.size() >= 1 && data.houseName.size() <= 100 &&
+             data.landlordUid is string && data.landlordUid.size() >= 1 && data.landlordUid.size() <= 128 &&
+             data.payerName is string && data.payerName.size() >= 2 && data.payerName.size() <= 100 &&
+             data.payerPhone is string && data.payerPhone.size() >= 5 && data.payerPhone.size() <= 30 &&
+             data.referenceCode is string && data.referenceCode.size() >= 2 && data.referenceCode.size() <= 80 &&
+             data.amountUsd is number && data.amountUsd >= 0 && data.amountUsd <= 500 &&
+             data.currencyLabel is string && data.currencyLabel in ['USD', 'ZiG'] &&
+             data.status in ['PENDING', 'UNLOCKED', 'REJECTED'] &&
+             (!('adminNote' in data) || (data.adminNote is string && data.adminNote.size() <= 200)) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidHouseUnlock(data) {
+      return data.customerUid is string && data.customerUid.size() >= 1 && data.customerUid.size() <= 128 &&
+             data.houseId is string && data.houseId.size() >= 1 && data.houseId.size() <= 128 &&
+             data.houseName is string && data.houseName.size() >= 1 && data.houseName.size() <= 100 &&
+             data.landlordUid is string && data.landlordUid.size() >= 1 && data.landlordUid.size() <= 128 &&
+             data.payerName is string && data.payerName.size() >= 2 && data.payerName.size() <= 100 &&
+             data.paymentRequestId is string && data.paymentRequestId.size() >= 1 && data.paymentRequestId.size() <= 128 &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidChatThread(data) {
+      return data.customerUid is string && data.customerUid.size() >= 1 && data.customerUid.size() <= 128 &&
+             data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 80 &&
+             data.landlordUid is string && data.landlordUid.size() >= 1 && data.landlordUid.size() <= 128 &&
+             data.landlordName is string && data.landlordName.size() >= 1 && data.landlordName.size() <= 80 &&
+             data.houseId is string && data.houseId.size() >= 1 && data.houseId.size() <= 128 &&
+             data.houseName is string && data.houseName.size() >= 1 && data.houseName.size() <= 100 &&
+             data.memberUids is list && data.memberUids.size() == 2 &&
+             data.customerUid in data.memberUids && data.landlordUid in data.memberUids &&
+             data.lastMessage is string && data.lastMessage.size() <= 500 &&
+             data.lastSenderUid is string && data.lastSenderUid.size() <= 128 &&
+             data.unreadByCustomer is int && data.unreadByCustomer >= 0 && data.unreadByCustomer <= 10000 &&
+             data.unreadByLandlord is int && data.unreadByLandlord >= 0 && data.unreadByLandlord <= 10000 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidChatMessage(data) {
+      return data.threadId is string && data.threadId.size() >= 1 && data.threadId.size() <= 128 &&
+             data.senderUid is string && data.senderUid.size() >= 1 && data.senderUid.size() <= 128 &&
+             data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 80 &&
+             data.memberUids is list && data.memberUids.size() == 2 && (data.memberUids[0] is string) &&
+             data.text is string && data.text.size() <= 1000 &&
+             data.messageType in ['TEXT', 'IMAGE', 'LOCATION'] &&
+             (!('imageData' in data) || (data.imageData is string && data.imageData.size() <= 350000)) &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    // --- COLLECTION RULES ---
+
+    match /admins/{adminUid} {
+      allow get: if isSignedIn() && isValidId(adminUid) && (request.auth.uid == adminUid || isAdmin());
+      allow list, write: if false;
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       isValidUserProfile(incoming()) &&
+                       (isAdmin() || (incoming().role in ['CUSTOMER', 'LANDLORD'] && incoming().landlordApproved == false && incoming().accountActive == true)) &&
+                       incoming().keys().hasAll(['userId', 'displayName', 'email', 'role', 'landlordApproved', 'accountActive', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'displayName', 'email', 'phone', 'ecocashNumber', 'institution', 'bio', 'locationCity', 'avatarRef', 'role', 'landlordApproved', 'accountActive', 'createdAt', 'updatedAt']);
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       (
+                         (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phone', 'ecocashNumber', 'institution', 'bio', 'locationCity', 'avatarRef', 'role', 'landlordApproved', 'accountActive', 'updatedAt'])) ||
+                         (request.auth.uid == userId &&
+                          incoming().role in ['CUSTOMER', 'LANDLORD'] &&
+                          incoming().landlordApproved == existing().landlordApproved &&
+                          incoming().accountActive == existing().accountActive &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phone', 'ecocashNumber', 'institution', 'bio', 'locationCity', 'avatarRef', 'role', 'updatedAt']))
+                       );
+
+      allow delete: if isAdmin();
+    }
+
+    match /platform_config/{configId} {
+      allow get: if isSignedIn() && configId == 'settings';
+      allow list: if false;
+
+      allow create: if isAdmin() &&
+                       configId == 'settings' &&
+                       isValidPlatformConfig(incoming()) &&
+                       incoming().keys().hasAll(['unlockFeeUsd', 'unlockFeeZig', 'ecocashNumber', 'ecocashName', 'maxPhotosPerHouse', 'requireHouseApproval', 'requireFeeForLocation', 'requireFeeForChat', 'enableLiveVacancy', 'enableFeaturedBoost', 'maintenanceMode', 'welcomeBannerText', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['unlockFeeUsd', 'unlockFeeZig', 'ecocashNumber', 'ecocashName', 'maxPhotosPerHouse', 'requireHouseApproval', 'requireFeeForLocation', 'requireFeeForChat', 'enableLiveVacancy', 'enableFeaturedBoost', 'maintenanceMode', 'welcomeBannerText', 'updatedAt']);
+
+      allow update: if isAdmin() &&
+                       configId == 'settings' &&
+                       isValidPlatformConfig(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['unlockFeeUsd', 'unlockFeeZig', 'ecocashNumber', 'ecocashName', 'maxPhotosPerHouse', 'requireHouseApproval', 'requireFeeForLocation', 'requireFeeForChat', 'enableLiveVacancy', 'enableFeaturedBoost', 'maintenanceMode', 'welcomeBannerText', 'updatedAt']);
+
+      allow delete: if false;
+    }
+
+    match /houses/{houseId} {
+      allow get: if isSignedIn() && isValidId(houseId) &&
+                    (existing().status == 'APPROVED' || existing().landlordUid == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() &&
+                     (existing().status == 'APPROVED' || existing().landlordUid == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(houseId) &&
+                       isValidHouse(incoming()) &&
+                       incoming().landlordUid == request.auth.uid &&
+                       (isAdmin() || (incoming().status == 'PENDING' && incoming().featured == false)) &&
+                       incoming().keys().hasAll(['landlordUid', 'landlordName', 'name', 'suburb', 'description', 'monthlyRentUsd', 'depositUsd', 'totalRooms', 'vacantRooms', 'genderPolicy', 'roomType', 'distanceToCutKm', 'approxLat', 'approxLng', 'amenities', 'coverPhotoRef', 'photoRefs', 'status', 'featured', 'rating', 'reviewCount', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['landlordUid', 'landlordName', 'name', 'suburb', 'description', 'monthlyRentUsd', 'depositUsd', 'totalRooms', 'vacantRooms', 'genderPolicy', 'roomType', 'distanceToCutKm', 'approxLat', 'approxLng', 'amenities', 'coverPhotoRef', 'photoRefs', 'status', 'featured', 'rating', 'reviewCount', 'createdAt', 'updatedAt']);
+
+      allow update: if isSignedIn() &&
+                       isValidId(houseId) &&
+                       isValidHouse(incoming()) &&
+                       incoming().landlordUid == existing().landlordUid &&
+                       incoming().createdAt == existing().createdAt &&
+                       (
+                         (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['landlordName', 'name', 'suburb', 'description', 'monthlyRentUsd', 'depositUsd', 'totalRooms', 'vacantRooms', 'genderPolicy', 'roomType', 'distanceToCutKm', 'approxLat', 'approxLng', 'amenities', 'coverPhotoRef', 'photoRefs', 'status', 'featured', 'rating', 'reviewCount', 'updatedAt'])) ||
+                         (existing().landlordUid == request.auth.uid &&
+                          incoming().status == existing().status &&
+                          incoming().featured == existing().featured &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'suburb', 'description', 'monthlyRentUsd', 'depositUsd', 'totalRooms', 'vacantRooms', 'genderPolicy', 'roomType', 'distanceToCutKm', 'approxLat', 'approxLng', 'amenities', 'coverPhotoRef', 'photoRefs', 'updatedAt']))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(houseId) && (existing().landlordUid == request.auth.uid || isAdmin());
+
+      match /private/{docId} {
+        allow get: if isSignedIn() &&
+                      isValidId(houseId) &&
+                      docId == 'location' &&
+                      (
+                        isAdmin() ||
+                        get(/databases/$(database)/documents/houses/$(houseId)).data.landlordUid == request.auth.uid ||
+                        hasUnlockedHouse(request.auth.uid, houseId) ||
+                        isLocationFeeFree()
+                      );
+        allow list: if false;
+
+        allow create: if isSignedIn() &&
+                         isValidId(houseId) &&
+                         docId == 'location' &&
+                         isValidPrivateLocation(incoming()) &&
+                         incoming().houseId == houseId &&
+                         (isAdmin() || (incoming().landlordUid == request.auth.uid && get(/databases/$(database)/documents/houses/$(houseId)).data.landlordUid == request.auth.uid)) &&
+                         incoming().keys().hasAll(['houseId', 'landlordUid', 'exactLat', 'exactLng', 'streetAddress', 'landmarks', 'contactPhone', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['houseId', 'landlordUid', 'exactLat', 'exactLng', 'streetAddress', 'landmarks', 'contactPhone', 'updatedAt']);
+
+        allow update: if isSignedIn() &&
+                         isValidId(houseId) &&
+                         docId == 'location' &&
+                         isValidPrivateLocation(incoming()) &&
+                         incoming().houseId == existing().houseId &&
+                         incoming().landlordUid == existing().landlordUid &&
+                         (isAdmin() || get(/databases/$(database)/documents/houses/$(houseId)).data.landlordUid == request.auth.uid) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['exactLat', 'exactLng', 'streetAddress', 'landmarks', 'contactPhone', 'updatedAt']);
+
+        allow delete: if isAdmin();
+      }
+
+      match /photos/{photoId} {
+        allow get: if isSignedIn() &&
+                      isValidId(photoId) &&
+                      (
+                        isAdmin() ||
+                        existing().landlordUid == request.auth.uid ||
+                        get(/databases/$(database)/documents/houses/$(houseId)).data.status == 'APPROVED'
+                      );
+        allow list: if isSignedIn() && (isAdmin() || existing().landlordUid == request.auth.uid);
+
+        allow create: if isSignedIn() &&
+                         isValidId(photoId) &&
+                         isValidHousePhoto(incoming()) &&
+                         incoming().houseId == houseId &&
+                         (isAdmin() || (incoming().landlordUid == request.auth.uid && get(/databases/$(database)/documents/houses/$(houseId)).data.landlordUid == request.auth.uid)) &&
+                         incoming().keys().hasAll(['houseId', 'landlordUid', 'photoData', 'caption', 'sortOrder', 'createdAt']) &&
+                         incoming().keys().hasOnly(['houseId', 'landlordUid', 'photoData', 'caption', 'sortOrder', 'createdAt']);
+
+        allow delete: if isSignedIn() && isValidId(photoId) && (isAdmin() || existing().landlordUid == request.auth.uid);
+      }
+
+      match /reviews/{reviewId} {
+        allow get: if isSignedIn() && isValidId(reviewId);
+        allow list: if isSignedIn() && existing().houseId == houseId;
+
+        allow create: if isSignedIn() &&
+                         isValidId(reviewId) &&
+                         isValidHouseReview(incoming()) &&
+                         incoming().houseId == houseId &&
+                         incoming().authorUid == request.auth.uid &&
+                         (isAdmin() || hasUnlockedHouse(request.auth.uid, houseId)) &&
+                         incoming().keys().hasAll(['houseId', 'authorUid', 'authorName', 'rating', 'comment', 'createdAt']) &&
+                         incoming().keys().hasOnly(['houseId', 'authorUid', 'authorName', 'rating', 'comment', 'createdAt']);
+
+        allow delete: if isAdmin() || (isSignedIn() && existing().authorUid == request.auth.uid);
+      }
+    }
+
+    match /payment_requests/{requestId} {
+      allow get: if isSignedIn() && isValidId(requestId) && (existing().customerUid == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().customerUid == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(requestId) &&
+                       isValidPaymentRequest(incoming()) &&
+                       incoming().customerUid == request.auth.uid &&
+                       incoming().status == 'PENDING' &&
+                       exists(/databases/$(database)/documents/houses/$(incoming().houseId)) &&
+                       incoming().keys().hasAll(['customerUid', 'customerEmail', 'houseId', 'houseName', 'landlordUid', 'payerName', 'payerPhone', 'referenceCode', 'amountUsd', 'currencyLabel', 'status', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['customerUid', 'customerEmail', 'houseId', 'houseName', 'landlordUid', 'payerName', 'payerPhone', 'referenceCode', 'amountUsd', 'currencyLabel', 'status', 'adminNote', 'createdAt', 'updatedAt']);
+
+      allow update: if isSignedIn() &&
+                       isValidId(requestId) &&
+                       isAdmin() &&
+                       isValidPaymentRequest(incoming()) &&
+                       incoming().customerUid == existing().customerUid &&
+                       incoming().houseId == existing().houseId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'adminNote', 'updatedAt']);
+
+      allow delete: if isAdmin();
+    }
+
+    match /unlocks/{unlockId} {
+      allow get, list: if isSignedIn() && (existing().customerUid == request.auth.uid || existing().landlordUid == request.auth.uid || isAdmin());
+
+      allow create: if isAdmin() &&
+                       isValidId(unlockId) &&
+                       unlockId == (incoming().customerUid + '_' + incoming().houseId) &&
+                       isValidHouseUnlock(incoming()) &&
+                       incoming().keys().hasAll(['customerUid', 'houseId', 'houseName', 'landlordUid', 'payerName', 'paymentRequestId', 'createdAt']) &&
+                       incoming().keys().hasOnly(['customerUid', 'houseId', 'houseName', 'landlordUid', 'payerName', 'paymentRequestId', 'createdAt']);
+
+      allow update: if isAdmin() &&
+                       isValidId(unlockId) &&
+                       isValidHouseUnlock(incoming()) &&
+                       incoming().createdAt == existing().createdAt;
+
+      allow delete: if isAdmin();
+    }
+
+    match /chat_threads/{threadId} {
+      allow get, list: if isSignedIn() && (request.auth.uid in existing().memberUids || isAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(threadId) &&
+                       threadId == (incoming().customerUid + '_' + incoming().houseId) &&
+                       isValidChatThread(incoming()) &&
+                       (request.auth.uid == incoming().customerUid || request.auth.uid == incoming().landlordUid || isAdmin()) &&
+                       (isAdmin() || hasUnlockedHouse(incoming().customerUid, incoming().houseId) || isChatFeeFree()) &&
+                       incoming().keys().hasAll(['customerUid', 'customerName', 'landlordUid', 'landlordName', 'houseId', 'houseName', 'memberUids', 'lastMessage', 'lastSenderUid', 'unreadByCustomer', 'unreadByLandlord', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['customerUid', 'customerName', 'landlordUid', 'landlordName', 'houseId', 'houseName', 'memberUids', 'lastMessage', 'lastSenderUid', 'unreadByCustomer', 'unreadByLandlord', 'createdAt', 'updatedAt']);
+
+      allow update: if isSignedIn() &&
+                       isValidId(threadId) &&
+                       isValidChatThread(incoming()) &&
+                       (request.auth.uid in existing().memberUids || isAdmin()) &&
+                       incoming().customerUid == existing().customerUid &&
+                       incoming().landlordUid == existing().landlordUid &&
+                       incoming().houseId == existing().houseId &&
+                       incoming().memberUids == existing().memberUids &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['lastMessage', 'lastSenderUid', 'unreadByCustomer', 'unreadByLandlord', 'updatedAt']);
+
+      allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        allow get, list: if isSignedIn() && (request.auth.uid in existing().memberUids || isAdmin());
+
+        allow create: if isSignedIn() &&
+                         isValidId(messageId) &&
+                         isValidChatMessage(incoming()) &&
+                         incoming().threadId == threadId &&
+                         incoming().senderUid == request.auth.uid &&
+                         request.auth.uid in incoming().memberUids &&
+                         exists(/databases/$(database)/documents/chat_threads/$(threadId)) &&
+                         incoming().memberUids == get(/databases/$(database)/documents/chat_threads/$(threadId)).data.memberUids &&
+                         incoming().keys().hasAll(['threadId', 'senderUid', 'senderName', 'memberUids', 'text', 'messageType', 'createdAt']) &&
+                         incoming().keys().hasOnly(['threadId', 'senderUid', 'senderName', 'memberUids', 'text', 'messageType', 'imageData', 'createdAt']);
+
+        allow delete: if isAdmin();
+      }
+    }
+  }
+}

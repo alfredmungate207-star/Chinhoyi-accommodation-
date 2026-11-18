@@ -1,0 +1,6 @@
+{
+  "name": "Chinhoyi Stays",
+  "description": "Chinhoyi Accommodations boarding house marketplace with landlord listings, live vacancy updates, EcoCash unlock verification, real-time chat, live locations, and admin management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
